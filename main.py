@@ -39,46 +39,7 @@ class TrapezoidalNumber:
             1. / self.low)
 
 
-class FuzzyPairwiseComparisonMatrix:
-    def __init__(self, n, matrix=None):
-        self.n = n
-        self.matrix = copy.deepcopy(matrix) if matrix is not None else [[None if i != j else 1
-                                                                         for i in range(0, n)]
-                                                                        for j in range(0, n)]
-
-    def __getitem__(self, i, j):
-        return self.matrix[i][j]
-
-    def __str__(self):
-        return "\n".join(["[" + ",".join([str(element) for element in line]) + "]" for line in self.matrix])
-
-    def AlphaLevel(self, alpha):
-        return FuzzyPairwiseComparisonMatrix(self.n,
-                                             [[self.matrix[i][j].AlphaLevel(alpha) if i != j else 1
-                                               for j in range(0, self.n)]
-                                              for i in range(0, self.n)])
-
-    # def GenerateFromRow(self,row_index):
-    #     return FuzzyPairwiseComparisonMatrix(self.n,
-    #                                          [[self.matrix[i][j].AlphaLevel(alpha) if i != j else 1
-    #                                            for j in range(0, self.n)]
-    #                                           for i in range(0, self.n)])
-
-    def Consistency(self):
-        consistent = True
-        for i in range(0, self.n):
-            for j in range(0, self.n):
-                if (i != j):
-                    max_low_produce = max([self.matrix[i][k].low * self.matrix[k][j].low
-                                           if k != i and k != j else -sys.maxint - 1
-                                           for k in range(0, self.n)])
-                    min_high_produce = min([self.matrix[i][k].high * self.matrix[k][j].high
-                                            if k != i and k != j else sys.maxint
-                                            for k in range(0, self.n)])
-                    consistent = consistent and max_low_produce <= min_high_produce
-        return consistent
-
-_1 = TrapezoidalNumber(1,1,1,1)
+_1 = TrapezoidalNumber(1, 1, 1, 1)
 one = TrapezoidalNumber(1. / 3, 0.5, 1.5, 2)
 two = TrapezoidalNumber(1, 1.5, 2.5, 3)
 three = TrapezoidalNumber(2, 2.5, 3.5, 4)
@@ -88,6 +49,47 @@ six = TrapezoidalNumber(5, 5.5, 6.5, 7)
 seven = TrapezoidalNumber(6, 6.5, 7.5, 8)
 eight = TrapezoidalNumber(7, 7.5, 8.5, 9)
 nein = TrapezoidalNumber(8, 9, 9, 9)
+
+
+class FuzzyPairwiseComparisonMatrix:
+    def __init__(self, n, matrix):
+        self.n = n
+        self.matrix = copy.deepcopy(matrix)
+
+    def __getitem__(self, i, j):
+        return self.matrix[i][j]
+
+    def __str__(self):
+        return "\n".join(["[" + ",".join([str(element) for element in line]) + "]" for line in self.matrix])
+
+    def AlphaLevel(self, alpha):
+        return FuzzyPairwiseComparisonMatrix(self.n,
+                                             [[self.matrix[i][j].AlphaLevel(alpha) #if i != j else _1
+                                               for j in range(0, self.n)]
+                                              for i in range(0, self.n)])
+
+    def GenerateFromRow(self, row_index):
+        return FuzzyPairwiseComparisonMatrix(self.n,
+                                             [[IntervalNumber(
+                                                 self.matrix[i][row_index].low * self.matrix[row_index][j].low,
+                                                 self.matrix[i][row_index].high * self.matrix[row_index][j].high)
+                                               for j in range(0, self.n)]
+                                              for i in range(0, self.n)])
+
+    def Consistency(self):
+        consistent = True
+        for i in range(0, self.n):
+            for j in range(0, self.n):
+                if (i != j):
+                    max_low_produce = max([self.matrix[i][k].low * self.matrix[k][j].low
+                                           # if k != i and k != j else -sys.maxint - 1
+                                           for k in range(0, self.n)])
+                    min_high_produce = min([self.matrix[i][k].high * self.matrix[k][j].high
+                                            # if k != i and k != j else sys.maxint
+                                            for k in range(0, self.n)])
+                    consistent = consistent and max_low_produce <= min_high_produce
+        return consistent
+
 
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
                                                   [two, _1, three.Inverse()],
@@ -115,8 +117,13 @@ for key in globals().keys():
         print "alpha 0 "
         print globals()[key].AlphaLevel(0)
         print "consistent " + str(globals()[key].AlphaLevel(0).Consistency())
+        for i in range(0, globals()[key].n):
+            print "generated from row " + str(i)
+            print globals()[key].AlphaLevel(0).GenerateFromRow(i)
         print "alpha 0.5 "
         print globals()[key].AlphaLevel(0.5)
         print "consistent " + str(globals()[key].AlphaLevel(0.5).Consistency())
+        for i in range(0, globals()[key].n):
+            print "generated from row " + str(i)
+            print globals()[key].AlphaLevel(0.5).GenerateFromRow(i)
         print
-
