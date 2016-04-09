@@ -1,4 +1,5 @@
 import copy
+import sys
 
 
 class IntervalNumber:
@@ -7,7 +8,7 @@ class IntervalNumber:
         self.high = high
 
     def __str__(self):
-        return "[" + str(self.low) + ";" + str(self.high) + "]"
+        return "(" + str(self.low) + ";" + str(self.high) + ")"
 
     def Inverse(self):
         return IntervalNumber(1. / self.high, 1. / self.low)
@@ -21,7 +22,7 @@ class TrapezoidalNumber:
         self.high = high
 
     def __str__(self):
-        return "[" + str(self.low) + ";" + str(self.mid_low) + ";" + str(self.mid_high) + ";" + str(self.high) + "]"
+        return "(" + str(self.low) + ";" + str(self.mid_low) + ";" + str(self.mid_high) + ";" + str(self.high) + ")"
 
     def AlphaLevel(self, alpha):
         return IntervalNumber(self.low + alpha * (self.mid_low - self.low),
@@ -46,7 +47,7 @@ class FuzzyPairwiseComparisonMatrix:
         return self.matrix[i][j]
 
     def __str__(self):
-        return "\n".join(["[" + ";".join([str(element) for element in line]) + "]" for line in self.matrix])
+        return "\n".join(["[" + ",".join([str(element) for element in line]) + "]" for line in self.matrix])
 
     def AlphaLevel(self, alpha):
         return FuzzyPairwiseComparisonMatrix(self.n,
@@ -54,6 +55,19 @@ class FuzzyPairwiseComparisonMatrix:
                                                for i in range(0, self.n)]
                                               for j in range(0, self.n)])
 
+    def Consistency(self):
+        consistent = True
+        for i in range(0, self.n):
+            for j in range(0, self.n):
+                if (i != j):
+                    max_low_produce = max([self.matrix[i][k].low * self.matrix[k][j].low
+                                           if k != i and k != j else -sys.maxint - 1
+                                           for k in range(0, self.n)])
+                    min_high_produce = min([self.matrix[i][k].high * self.matrix[k][j].high
+                                            if k != i and k != j else sys.maxint
+                                            for k in range(0, self.n)])
+                    consistent = consistent and max_low_produce <= min_high_produce
+        return consistent
 
 one = TrapezoidalNumber(1. / 3, 0.5, 1.5, 2)
 two = TrapezoidalNumber(1, 1.5, 2.5, 3)
@@ -69,7 +83,29 @@ criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[1, two.Inverse(), three.Inver
                                                   [two, 1, three.Inverse()],
                                                   [three, three, 1]])
 
-criteria_fpcm_alpha = criteria_fpcm.AlphaLevel(0.5)
+alternative_fpcm_by_crit_1 = FuzzyPairwiseComparisonMatrix(4, [[1, one, one, three],
+                                                               [one, 1, three, one],
+                                                               [one, three.Inverse(), 1, two],
+                                                               [three.Inverse(), one, two.Inverse(), 1]])
 
-print criteria_fpcm
-print criteria_fpcm_alpha
+alternative_fpcm_by_crit_2 = FuzzyPairwiseComparisonMatrix(4, [[1, three, three, three],
+                                                               [three.Inverse(), 1, three.Inverse(), three.Inverse()],
+                                                               [three.Inverse(), three, 1, one],
+                                                               [three.Inverse(), three, one, 1]])
+
+alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[1, one, three.Inverse(), two],
+                                                               [one, 1, three.Inverse(), three],
+                                                               [three, three, 1, five],
+                                                               [two.Inverse(), three.Inverse(), five.Inverse(), 1]])
+
+for key in globals().keys():
+    if "fpcm" in key:
+        print key
+        print globals()[key]
+        print "alpha 0 "
+        print globals()[key].AlphaLevel(0)
+        print "consistent " + str(globals()[key].AlphaLevel(0).Consistency())
+        print "alpha 0.5 "
+        print globals()[key].AlphaLevel(0.5)
+        print "consistent " + str(globals()[key].AlphaLevel(0.5).Consistency())
+        print
