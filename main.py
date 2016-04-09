@@ -1,12 +1,13 @@
 import copy
 
-from numpy.matrixlib.defmatrix import matrix
-
 
 class IntervalNumber:
     def __init__(self, low, high):
         self.low = low
         self.high = high
+
+    def __str__(self):
+        return "[" + str(self.low) + ";" + str(self.high) + "]"
 
     def Inverse(self):
         return IntervalNumber(1. / self.high, 1. / self.low)
@@ -19,12 +20,15 @@ class TrapezoidalNumber:
         self.mid_high = mid_high
         self.high = high
 
+    def __str__(self):
+        return "[" + str(self.low) + ";" + str(self.mid_low) + ";" + str(self.mid_high) + ";" + str(self.high) + "]"
+
     def AlphaLevel(self, alpha):
         return IntervalNumber(self.low + alpha * (self.mid_low - self.low),
                               self.high + alpha * (self.mid_high - self.high))
 
     def Inverse(self):
-        raise TrapezoidalNumber(
+        return TrapezoidalNumber(
             1. / self.high,
             1. / self.mid_high,
             1. / self.mid_low,
@@ -40,6 +44,9 @@ class FuzzyPairwiseComparisonMatrix:
 
     def __getitem__(self, i, j):
         return self.matrix[i][j]
+
+    def __str__(self):
+        return "\n".join(["[" + ";".join([str(element) for element in line]) + "]" for line in self.matrix])
 
     def AlphaLevel(self, alpha):
         return FuzzyPairwiseComparisonMatrix(self.n,
@@ -61,3 +68,8 @@ nein = TrapezoidalNumber(8, 9, 9, 9)
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[1, two.Inverse(), three.Inverse()],
                                                   [two, 1, three.Inverse()],
                                                   [three, three, 1]])
+
+criteria_fpcm_alpha = criteria_fpcm.AlphaLevel(0.5)
+
+print criteria_fpcm
+print criteria_fpcm_alpha
