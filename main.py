@@ -3,6 +3,8 @@ import math
 import sys
 import string
 
+N = 11  # scale coefficient
+
 
 class IntervalNumber:
     def __init__(self, low, high):
@@ -154,13 +156,13 @@ class Spectre:
 
     def HetaZero(self):
         G = self.n_experts / (self.n_scale * math.log(self.n_scale) * math.log(self.n_experts))
-        return math.log(self.n_scale) + G*sum([abs(k-(self.n_scale+1.)/2.) for k in range(0,self.n_scale)])
+        return math.log(self.n_scale) + G * sum([abs(k - (self.n_scale + 1.) / 2.) for k in range(0, self.n_scale)])
 
     def Heta(self):
         return self.Phi() + self.Psi()
 
     def ConsistencyCoefficient(self):
-        return 1-self.Heta()/self.HetaZero()
+        return 1 - self.Heta() / self.HetaZero()
 
 
 class FuzzyConsistencyCoefficientGenerator:
@@ -181,8 +183,8 @@ class FuzzyConsistencyCoefficientGenerator:
 
     def blarg(self):
         temp = [weight.GeneratePreSpectreElements() for weight in self.weights]
-        spectres = [[temp[j][i] for j in range(0, self.n)] for i in range(0, self.n)]
-        phis = []
+        pre_spectres = [[temp[j][i] for j in range(0, self.n)] for i in range(0, self.n)]
+        spectres = [Spectre(N, self.n, pre_spectre) for pre_spectre in pre_spectres]
 
 
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
