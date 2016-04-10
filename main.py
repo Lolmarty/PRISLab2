@@ -94,6 +94,10 @@ class FuzzyPairwiseComparisonMatrix:
 
 class FuzzyWeights:
     def __init__(self, n, weights):
+        """
+        :type n: int
+        :type weights: list[IntervalNumber]
+        """
         if n != len(weights):
             raise ValueError("Length of the weights vector ({0}) doesn't match the number of dimensions ({1}).".format(
                 len(weights), n))
@@ -104,6 +108,28 @@ class FuzzyWeights:
         """Generates the h'th elements for spectres,
         transpose after finding them all"""
         return [weight.DistanceToZero() for weight in self.weights]
+
+
+class FuzzyConsistencyCoefficientGenerator:
+    def __init__(self, n, weights):
+        """
+        :type n: int
+        :type weights: list[FuzzyWeights]
+        """
+        if n != len(weights):
+            raise ValueError("Amount of the weights vectors ({0}) doesn't match the number of dimensions ({1}).".format(
+                len(weights), n))
+        if not all([n == weight.n for weight in weights]):
+            indexes = ",".join([str(weights.index(weight)) for weight in weights if n != weight.n])
+            raise ValueError("Length of the weights vectors #{0} doesn't match the number of dimensions ({1}).".format(
+                indexes, n))
+        self.n = n
+        self.weights = copy.deepcopy(weights)
+
+    def blarg(self):
+        temp = [weight.GenerateSpectreElements() for weight in self.weights]
+        spectres = [[temp[j][i] for j in range(0, self.n)] for i in range(0, self.n)]
+        phis = []
 
 
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
