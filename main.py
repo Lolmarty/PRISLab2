@@ -1,5 +1,6 @@
 import copy
 import sys
+import string
 
 
 class IntervalNumber:
@@ -64,7 +65,7 @@ class FuzzyPairwiseComparisonMatrix:
 
     def AlphaLevel(self, alpha):
         return FuzzyPairwiseComparisonMatrix(self.n,
-                                             [[self.matrix[i][j].AlphaLevel(alpha) #if i != j else _1
+                                             [[self.matrix[i][j].AlphaLevel(alpha)  # if i != j else _1
                                                for j in range(0, self.n)]
                                               for i in range(0, self.n)])
 
@@ -91,6 +92,20 @@ class FuzzyPairwiseComparisonMatrix:
         return consistent
 
 
+class FuzzyWeights:
+    def __init__(self, n, weights):
+        if n != len(weights):
+            raise ValueError("Length of the weights vector ({0}) doesn't match the number of dimensions ({1}).".format(
+                len(weights), n))
+        self.n = n
+        self.weights = copy.deepcopy(weights)
+
+    def GenerateSpectreElements(self):
+        """Generates the h'th elements for spectres,
+        transpose after finding them all"""
+        return [weight.DistanceToZero() for weight in self.weights]
+
+
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
                                                   [two, _1, three.Inverse()],
                                                   [three, three, _1]])
@@ -110,20 +125,23 @@ alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[_1, one, three.I
                                                                [three, three, _1, five],
                                                                [two.Inverse(), three.Inverse(), five.Inverse(), _1]])
 
-for key in globals().keys():
-    if "fpcm" in key:
-        print key
-        print globals()[key]
-        print "alpha 0 "
-        print globals()[key].AlphaLevel(0)
-        print "consistent " + str(globals()[key].AlphaLevel(0).Consistency())
-        for i in range(0, globals()[key].n):
-            print "generated from row " + str(i)
-            print globals()[key].AlphaLevel(0).GenerateFromRow(i)
-        print "alpha 0.5 "
-        print globals()[key].AlphaLevel(0.5)
-        print "consistent " + str(globals()[key].AlphaLevel(0.5).Consistency())
-        for i in range(0, globals()[key].n):
-            print "generated from row " + str(i)
-            print globals()[key].AlphaLevel(0.5).GenerateFromRow(i)
-        print
+# for key in globals().keys():
+#     if "fpcm" in key:
+#         print key
+#         print globals()[key]
+#         print "alpha 0 "
+#         print globals()[key].AlphaLevel(0)
+#         print "consistent " + str(globals()[key].AlphaLevel(0).Consistency())
+#         for i in range(0, globals()[key].n):
+#             print "generated from row " + str(i)
+#             print globals()[key].AlphaLevel(0).GenerateFromRow(i)
+#         print "alpha 0.5 "
+#         print globals()[key].AlphaLevel(0.5)
+#         print "consistent " + str(globals()[key].AlphaLevel(0.5).Consistency())
+#         for i in range(0, globals()[key].n):
+#             print "generated from row " + str(i)
+#             print globals()[key].AlphaLevel(0.5).GenerateFromRow(i)
+#         print
+
+dummy = FuzzyWeights(3, [IntervalNumber(0.1, 0.3), IntervalNumber(0.3, 0.4), IntervalNumber(0.2, 0.6)])
+print dummy.GenerateSpectreElements()
