@@ -1,6 +1,6 @@
 import copy
 import math
-import sys
+import simplex
 import string
 
 N = 11  # scale coefficient
@@ -99,6 +99,32 @@ class FuzzyPairwiseComparisonMatrix:
                                             for k in range(0, self.n)])
                     consistent = consistent and max_low_produce <= min_high_produce
         return consistent
+
+    def GenerateMinimalExpandedMatrix(self):
+        """
+        delta_1 in the front, delta_2 in the middle, weights in the end
+        :return:
+        """
+        solver = simplex.SimplexSolver([1] * (self.n * (self.n - 1)) + [0] * self.n)
+        for i in range(self.n - 1):
+            for j in range(i + 1, self.n):
+                expression1 = [0] * self.n ** 2
+                expression1[(self.n * 2 - 1 - i) * i / 2 + j] = 1
+                expression1[self.n * (self.n - 1) + i] = -1
+                expression1[self.n * (self.n - 1) + j] = 1
+                value1 = math.log(self.matrix[i][j].low)
+                solver.add_constraint(expression1, value1)
+
+                expression2 = [0] * self.n ** 2
+                expression2[self.n * (self.n - 1) / 2 + (self.n * 2 - 1 - i) * i / 2 + j] = 1
+                expression2[self.n * (self.n - 1) + i] = 1
+                expression2[self.n * (self.n - 1) + j] = 1
+                value2 = -math.log(self.matrix[i][j].high)
+                solver.add_constraint(expression2, value2)
+        solver.prepare()
+        solver.display()
+        deltas_and_weights = solver.solve()
+        print(deltas_and_weights)
 
 
 class FuzzyWeights:
@@ -205,33 +231,31 @@ alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[_1, one, three.I
                                                                [one.Inverse(), _1, three.Inverse(), three],
                                                                [three, three, _1, five],
                                                                [two.Inverse(), three.Inverse(), five.Inverse(), _1]])
-
-# for key in globals().keys():
-#     if "fpcm" in key:
-#         print key
-#         print globals()[key]
-#         print "alpha 0 "
-#         print globals()[key].AlphaLevel(0)
-#         print "consistent " + str(globals()[key].AlphaLevel(0).Consistency())
-#         for i in range(0, globals()[key].n):
-#             print "generated from row " + str(i)
-#             print globals()[key].AlphaLevel(0).GenerateFromRow(i)
-#         print "alpha 0.5 "
-#         print globals()[key].AlphaLevel(0.5)
-#         print "consistent " + str(globals()[key].AlphaLevel(0.5).Consistency())
-#         for i in range(0, globals()[key].n):
-#             print "generated from row " + str(i)
-#             print globals()[key].AlphaLevel(0.5).GenerateFromRow(i)
-#         print
+for matrix in [criteria_fpcm,
+               alternative_fpcm_by_crit_1,
+               alternative_fpcm_by_crit_2,
+               alternative_fpcm_by_crit_3]:
+    for alpha in [0., 0.5]:
+        # print key
+        # print globals()[key]
+        # print "alpha " +str(alpha)
+        # print globals()[key].AlphaLevel(alpha)
+        # print "consistent " + str(globals()[key].AlphaLevel(alpha).Consistency())
+        if not matrix.AlphaLevel(alpha).Consistency():
+            matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix()
+            # for i in range(0, globals()[key].n):
+            #     print "generated from row " + str(i)
+            #     print globals()[key].AlphaLevel(alpha).GenerateFromRow(i)
+    print
 
 # dummy = FuzzyWeights(3, [IntervalNumber(0.1, 0.3), IntervalNumber(0.3, 0.4), IntervalNumber(0.2, 0.6)])
 # print dummy.GeneratePreSpectreElements()
 
-spectre = Spectre(11, 5, [0.1, 0.499965, 0.7897, 0.8, 0.0000001])
-print spectre.spectre
-print spectre.Average()
-print spectre.Psi()
-print spectre.Phi()
-print spectre.HetaZero()
-print spectre.Heta()
-print spectre.ConsistencyCoefficient()
+# spectre = Spectre(11, 5, [0.1, 0.499965, 0.7897, 0.8, 0.0000001])
+# print spectre.spectre
+# print spectre.Average()
+# print spectre.Psi()
+# print spectre.Phi()
+# print spectre.HetaZero()
+# print spectre.Heta()
+# print spectre.ConsistencyCoefficient()
