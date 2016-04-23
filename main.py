@@ -1,6 +1,6 @@
 import copy
 import math
-import simplex
+from scipy.optimize import linprog
 import string
 
 N = 11  # scale coefficient
@@ -61,12 +61,34 @@ eight = TrapezoidalNumber(7, 7.5, 8.5, 9)
 nein = TrapezoidalNumber(8, 9, 9, 9)
 
 
+class FuzzyWeights:
+    def __init__(self, n, weights):
+        """
+        :type n: int
+        :type weights: list[IntervalNumber]
+        """
+        if n != len(weights):
+            raise ValueError("Length of the weights vector ({0}) doesn't match the number of dimensions ({1}).".format(
+                len(weights), n))
+        self.n = n
+        self.weights = copy.deepcopy(weights)
+
+    def __str__(self):
+        return "[" + ";".join([str(weight) for weight in self.weights]) + "]"
+
+    def GeneratePreSpectreElements(self):
+        """Generates the h'th elements for spectres,
+        transpose after finding them all"""
+        return [weight.DistanceToZero() for weight in self.weights]
+
+
 class FuzzyPairwiseComparisonMatrix:
     def __init__(self, n, matrix):
         self.n = n
         self.matrix = copy.deepcopy(matrix)
 
-    def __getitem__(self, i, j):
+    def __getitem__(self, position):
+        i, j = position
         return self.matrix[i][j]
 
     def __str__(self):
@@ -92,57 +114,73 @@ class FuzzyPairwiseComparisonMatrix:
             for j in range(0, self.n):
                 if (i != j):
                     max_low_produce = max([self.matrix[i][k].low * self.matrix[k][j].low
-                                           # if k != i and k != j else -sys.maxint - 1
                                            for k in range(0, self.n)])
                     min_high_produce = min([self.matrix[i][k].high * self.matrix[k][j].high
-                                            # if k != i and k != j else sys.maxint
                                             for k in range(0, self.n)])
                     consistent = consistent and max_low_produce <= min_high_produce
         return consistent
 
     def GenerateMinimalExpandedMatrix(self):
         """
-        delta_1 in the front, delta_2 in the middle, weights in the end
         :return:
         """
-        solver = simplex.SimplexSolver([1] * (self.n * (self.n - 1)) + [0] * self.n)
+        coefficients = [1] * (self.n * (self.n - 1)) + [0] * self.n
+        restrictions_right_side = [[0 for _ in range(self.n ** 2)] for __ in range(self.n * (self.n - 1))]
+        restrictions_left_side = [0 for _ in range(self.n * (self.n - 1))]
+        variable_boundaries = tuple(
+            [(0, None) for _ in range(self.n * (self.n - 1))] + [(None, 0) for _ in range(self.n)])
+        for i in range(self.n * (self.n - 1)):
+            restrictions_right_side[i][i] = -1
+        counter = 0
         for i in range(self.n - 1):
             for j in range(i + 1, self.n):
-                expression1 = [0] * self.n ** 2
-                expression1[(self.n * 2 - 1 - i) * i / 2 + j] = 1
-                expression1[self.n * (self.n - 1) + i] = -1
-                expression1[self.n * (self.n - 1) + j] = 1
-                value1 = math.log(self.matrix[i][j].low)
-                solver.add_constraint(expression1, value1)
+                restrictions_right_side[counter][self.n * (self.n - 1) + i] = -1
+                restrictions_right_side[counter][self.n * (self.n - 1) + j] = 1
+                restrictions_right_side[counter + self.n * (self.n - 1) / 2][self.n * (self.n - 1) + i] = 1
+                restrictions_right_side[counter + self.n * (self.n - 1) / 2][self.n * (self.n - 1) + j] = -1
+                restrictions_left_side[counter] = -math.log(self.matrix[i][j].low)
+                restrictions_left_side[counter + self.n * (self.n - 1) / 2] = math.log(self.matrix[i][j].high)
+                counter += 1
+        deltas_and_weights = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
+                                     bounds=variable_boundaries)
+        expanded_matrix = FuzzyPairwiseComparisonMatrix(self.n, self.matrix)
+        counter = 0
+        for i in range(self.n - 1):
+            for j in range(i + 1, self.n):
+                expanded_matrix[i, j].low *= math.e ** -deltas_and_weights.x[counter]
+                expanded_matrix[i, j].high *= math.e ** deltas_and_weights.x[self.n * (self.n - 1) / 2 + counter]
+                counter += 1
+        return expanded_matrix
 
-                expression2 = [0] * self.n ** 2
-                expression2[self.n * (self.n - 1) / 2 + (self.n * 2 - 1 - i) * i / 2 + j] = 1
-                expression2[self.n * (self.n - 1) + i] = 1
-                expression2[self.n * (self.n - 1) + j] = 1
-                value2 = -math.log(self.matrix[i][j].high)
-                solver.add_constraint(expression2, value2)
-        solver.prepare()
-        solver.display()
-        deltas_and_weights = solver.solve()
-        print(deltas_and_weights)
-
-
-class FuzzyWeights:
-    def __init__(self, n, weights):
-        """
-        :type n: int
-        :type weights: list[IntervalNumber]
-        """
-        if n != len(weights):
-            raise ValueError("Length of the weights vector ({0}) doesn't match the number of dimensions ({1}).".format(
-                len(weights), n))
-        self.n = n
-        self.weights = copy.deepcopy(weights)
-
-    def GeneratePreSpectreElements(self):
-        """Generates the h'th elements for spectres,
-        transpose after finding them all"""
-        return [weight.DistanceToZero() for weight in self.weights]
+    def GenerateWeights(self):
+        restrictions_right_side = [[0 for _ in range(self.n)] for __ in range(self.n * (self.n - 1))]
+        restrictions_left_side = [0 for _ in range(self.n * (self.n - 1))]
+        variable_boundaries = tuple([(None, 0) for _ in range(self.n)])
+        counter = 0
+        for i in range(self.n - 1):
+            for j in range(i + 1, self.n):
+                restrictions_right_side[counter][i] = -1
+                restrictions_right_side[counter][j] = 1
+                restrictions_right_side[counter + self.n * (self.n - 1) / 2][i] = 1
+                restrictions_right_side[counter + self.n * (self.n - 1) / 2][j] = -1
+                restrictions_left_side[counter] = -math.log(self.matrix[i][j].low)
+                restrictions_left_side[counter + self.n * (self.n - 1) / 2] = math.log(self.matrix[i][j].high)
+                counter += 1
+        weights = []
+        for i in range(self.n):
+            coefficients = [0 for _ in range(self.n)]
+            coefficients[i] = 1
+            lower_bound = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
+                                  bounds=variable_boundaries)
+            lower_bound = map(lambda x: math.e ** x, lower_bound.x)
+            lower_bound = lower_bound[i] / sum(lower_bound)
+            coefficients[i] = -1
+            upper_bound = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
+                                  bounds=variable_boundaries)
+            upper_bound = map(lambda x: math.e ** x, upper_bound.x)
+            upper_bound = upper_bound[i] / sum(upper_bound)
+            weights.append(IntervalNumber(lower_bound,upper_bound))
+        return FuzzyWeights(self.n,weights)
 
 
 class Spectre:
@@ -211,6 +249,8 @@ class FuzzyConsistencyCoefficientGenerator:
         temp = [weight.GeneratePreSpectreElements() for weight in self.weights]
         pre_spectres = [[temp[j][i] for j in range(0, self.n)] for i in range(0, self.n)]
         spectres = [Spectre(N, self.n, pre_spectre) for pre_spectre in pre_spectres]
+        consistency_coefficients = [spectre.ConsistencyCoefficient() for spectre in spectres]
+        print consistency_coefficients
 
 
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
@@ -236,26 +276,21 @@ for matrix in [criteria_fpcm,
                alternative_fpcm_by_crit_2,
                alternative_fpcm_by_crit_3]:
     for alpha in [0., 0.5]:
-        # print key
-        # print globals()[key]
         # print "alpha " +str(alpha)
         # print globals()[key].AlphaLevel(alpha)
         # print "consistent " + str(globals()[key].AlphaLevel(alpha).Consistency())
         if not matrix.AlphaLevel(alpha).Consistency():
-            matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix()
-            # for i in range(0, globals()[key].n):
-            #     print "generated from row " + str(i)
-            #     print globals()[key].AlphaLevel(alpha).GenerateFromRow(i)
+            print "fixed"
+            print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
+
+        try:
+            print str(matrix.AlphaLevel(alpha).GenerateWeights())
+        except Exception:
+            print "shouldafixed"
+
+        weights=[]
+        for i in range(matrix.n):
+            weights.append(matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
+        FuzzyConsistencyCoefficientGenerator(matrix.n,weights).blarg()
+
     print
-
-# dummy = FuzzyWeights(3, [IntervalNumber(0.1, 0.3), IntervalNumber(0.3, 0.4), IntervalNumber(0.2, 0.6)])
-# print dummy.GeneratePreSpectreElements()
-
-# spectre = Spectre(11, 5, [0.1, 0.499965, 0.7897, 0.8, 0.0000001])
-# print spectre.spectre
-# print spectre.Average()
-# print spectre.Psi()
-# print spectre.Phi()
-# print spectre.HetaZero()
-# print spectre.Heta()
-# print spectre.ConsistencyCoefficient()
