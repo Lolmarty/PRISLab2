@@ -73,6 +73,9 @@ class FuzzyWeights:
         self.n = n
         self.weights = copy.deepcopy(weights)
 
+    def __getitem__(self, index):
+        return self.weights[index]
+
     def __str__(self):
         return "[" + ";".join([str(weight) for weight in self.weights]) + "]"
 
@@ -179,8 +182,8 @@ class FuzzyPairwiseComparisonMatrix:
                                   bounds=variable_boundaries)
             upper_bound = map(lambda x: math.e ** x, upper_bound.x)
             upper_bound = upper_bound[i] / sum(upper_bound)
-            weights.append(IntervalNumber(lower_bound,upper_bound))
-        return FuzzyWeights(self.n,weights)
+            weights.append(IntervalNumber(lower_bound, upper_bound))
+        return FuzzyWeights(self.n, weights)
 
 
 class Spectre:
@@ -253,6 +256,53 @@ class FuzzyConsistencyCoefficientGenerator:
         print consistency_coefficients
 
 
+class FuzzyDistributiveGlobalWeightsGenerator:
+    def __init__(self, criteria_amount, alternatives_amount, criteria_weights, alternatives_weights_collection):
+        """
+        :type criteria_amount: int
+        :type alternatives_amount:int
+        :type criteria_weights: FuzzyWeights
+        :type alternatives_weights_collection: list[FuzzyWeights]
+        """
+        if criteria_amount != criteria_weights.n:
+            raise ValueError(
+                "Criteria amount ({0}) isn't equal to the length of criteria weights ({1})".format(criteria_amount,
+                                                                                                   criteria_weights.n))
+        if criteria_amount != len(alternatives_weights_collection):
+            raise ValueError(
+                "Criteria amount ({0}) isn't equal to the amount of local alternative weights ({1})".format(
+                    criteria_amount, len(alternatives_weights_collection)))
+        if not all([alternatives_amount == weight.n for weight in alternatives_weights_collection]):
+            indexes = ",".join(
+                [str(alternatives_weights_collection.index(weight)) for weight in alternatives_weights_collection if
+                 alternatives_amount != weight.n])
+            raise ValueError(
+                "Length of the weights vectors #{0} doesn't match the number of alternatives ({1}).".format(
+                    indexes, alternatives_amount))
+        self.criteria_amount = criteria_amount
+        self.alternatives_amount = alternatives_amount
+        self.criteria_weights = criteria_weights
+        self.alternatives_weights_collection = alternatives_weights_collection
+
+    def Generate(self):
+        constraints = [(criteria_weight.low, criteria_weight.high)
+                       for criteria_weight in self.criteria_weights.weights]
+        weights =[]
+        for i in range(self.alternatives_amount):
+            coefficients = [alternatives_weights[i].low for alternatives_weights in
+                            self.alternatives_weights_collection]
+            lower_boundary = linprog(c=coefficients, bounds=constraints)
+            lower_boundary = sum([self.alternatives_weights_collection[index][i].low*lower_boundary.x[index]
+                                  for index in range(self.criteria_amount)])
+            coefficients = [-alternatives_weights[i].high for alternatives_weights in
+                            self.alternatives_weights_collection]
+            upper_boundary = linprog(c=coefficients, bounds=constraints)
+            upper_boundary = sum([self.alternatives_weights_collection[index][i].high * upper_boundary.x[index]
+                                  for index in range(self.criteria_amount)])
+            weights.append(IntervalNumber(lower_boundary,upper_boundary))
+        return FuzzyWeights(self.alternatives_amount,weights)
+
+
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
                                                   [two, _1, three.Inverse()],
                                                   [three, three, _1]])
@@ -271,26 +321,55 @@ alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[_1, one, three.I
                                                                [one.Inverse(), _1, three.Inverse(), three],
                                                                [three, three, _1, five],
                                                                [two.Inverse(), three.Inverse(), five.Inverse(), _1]])
-for matrix in [criteria_fpcm,
-               alternative_fpcm_by_crit_1,
-               alternative_fpcm_by_crit_2,
-               alternative_fpcm_by_crit_3]:
-    for alpha in [0., 0.5]:
-        # print "alpha " +str(alpha)
-        # print globals()[key].AlphaLevel(alpha)
-        # print "consistent " + str(globals()[key].AlphaLevel(alpha).Consistency())
-        if not matrix.AlphaLevel(alpha).Consistency():
-            print "fixed"
-            print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
+# for matrix_name, matrix in {("criteria_fpcm", criteria_fpcm),
+#                             ("alternative_fpcm_by_crit_1", alternative_fpcm_by_crit_1),
+#                             ("alternative_fpcm_by_crit_2", alternative_fpcm_by_crit_2),
+#                             ("alternative_fpcm_by_crit_3", alternative_fpcm_by_crit_3)}:
+#     for alpha in [0., 0.5]:
+#         print matrix_name
+#         print "alpha " + str(alpha)
+#         # print matrix.AlphaLevel(alpha)
+#         # print "consistent " + str(globals()[key].AlphaLevel(alpha).Consistency())
+#         # if not matrix.AlphaLevel(alpha).Consistency():
+#         #     print "fixed"
+#         #     print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
+#         #
+#         try:
+#             print str(matrix.AlphaLevel(alpha).GenerateWeights())
+#         except Exception:
+#             print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
+#             #
+# weights=[]
+# for i in range(matrix.n):
+#     weights.append(matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
+# FuzzyConsistencyCoefficientGenerator(matrix.n,weights).blarg()
 
-        try:
-            print str(matrix.AlphaLevel(alpha).GenerateWeights())
-        except Exception:
-            print "shouldafixed"
+# print
+alpha = 0.5
 
-        weights=[]
-        for i in range(matrix.n):
-            weights.append(matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
-        FuzzyConsistencyCoefficientGenerator(matrix.n,weights).blarg()
+try:
+    criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
+except Exception:
+    criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
 
-    print
+try:
+    alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
+except Exception:
+    alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
+        alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+try:
+    alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
+except Exception:
+    alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
+        alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+try:
+    alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
+except Exception:
+    alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
+        alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+print str(FuzzyDistributiveGlobalWeightsGenerator(3, 4, criteria_weights,
+                                        [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
+                                         alternative_weights_by_crit_3]).Generate())
