@@ -287,20 +287,20 @@ class FuzzyDistributiveGlobalWeightsGenerator:
     def Generate(self):
         constraints = [(criteria_weight.low, criteria_weight.high)
                        for criteria_weight in self.criteria_weights.weights]
-        weights =[]
+        weights = []
         for i in range(self.alternatives_amount):
             coefficients = [alternatives_weights[i].low for alternatives_weights in
                             self.alternatives_weights_collection]
             lower_boundary = linprog(c=coefficients, bounds=constraints)
-            lower_boundary = sum([self.alternatives_weights_collection[index][i].low*lower_boundary.x[index]
+            lower_boundary = sum([self.alternatives_weights_collection[index][i].low * lower_boundary.x[index]
                                   for index in range(self.criteria_amount)])
             coefficients = [-alternatives_weights[i].high for alternatives_weights in
                             self.alternatives_weights_collection]
             upper_boundary = linprog(c=coefficients, bounds=constraints)
             upper_boundary = sum([self.alternatives_weights_collection[index][i].high * upper_boundary.x[index]
                                   for index in range(self.criteria_amount)])
-            weights.append(IntervalNumber(lower_boundary,upper_boundary))
-        return FuzzyWeights(self.alternatives_amount,weights)
+            weights.append(IntervalNumber(lower_boundary, upper_boundary))
+        return FuzzyWeights(self.alternatives_amount, weights)
 
 
 criteria_fpcm = FuzzyPairwiseComparisonMatrix(3, [[_1, two.Inverse(), three.Inverse()],
@@ -371,5 +371,5 @@ except Exception:
         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
 
 print str(FuzzyDistributiveGlobalWeightsGenerator(3, 4, criteria_weights,
-                                        [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
-                                         alternative_weights_by_crit_3]).Generate())
+                                                  [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
+                                                   alternative_weights_by_crit_3]).Generate())
