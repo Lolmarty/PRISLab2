@@ -1,5 +1,7 @@
 import copy
 import math
+from operator import mul
+
 from scipy.optimize import linprog
 import string
 
@@ -256,7 +258,7 @@ class FuzzyConsistencyCoefficientGenerator:
         print consistency_coefficients
 
 
-class FuzzyDistributiveGlobalWeightsGenerator:
+class FuzzyGlobalWeightsGenerator:
     def __init__(self, criteria_amount, alternatives_amount, criteria_weights, alternatives_weights_collection):
         """
         :type criteria_amount: int
@@ -284,7 +286,7 @@ class FuzzyDistributiveGlobalWeightsGenerator:
         self.criteria_weights = criteria_weights
         self.alternatives_weights_collection = alternatives_weights_collection
 
-    def Generate(self):
+    def DistributiveGenerate(self):
         constraints = [(criteria_weight.low, criteria_weight.high)
                        for criteria_weight in self.criteria_weights.weights]
         weights = []
@@ -299,6 +301,25 @@ class FuzzyDistributiveGlobalWeightsGenerator:
             upper_boundary = linprog(c=coefficients, bounds=constraints)
             upper_boundary = sum([self.alternatives_weights_collection[index][i].high * upper_boundary.x[index]
                                   for index in range(self.criteria_amount)])
+            weights.append(IntervalNumber(lower_boundary, upper_boundary))
+        return FuzzyWeights(self.alternatives_amount, weights)
+
+    def MultiplicativeGenerate(self):
+        constraints = [(criteria_weight.low, criteria_weight.high)
+                       for criteria_weight in self.criteria_weights.weights]
+        weights = []
+        for i in range(self.alternatives_amount):
+            coefficients = [math.log(alternatives_weights[i].low) for alternatives_weights in
+                            self.alternatives_weights_collection]
+            lower_boundary = linprog(c=coefficients, bounds=constraints)
+            lower_boundary = reduce(mul,[self.alternatives_weights_collection[index][i].low ** lower_boundary.x[index]
+                                  for index in range(self.criteria_amount)])
+            coefficients = [-math.log(alternatives_weights[i].high) for alternatives_weights in
+                            self.alternatives_weights_collection]
+            upper_boundary = linprog(c=coefficients, bounds=constraints)
+            upper_boundary = reduce(mul,
+                [self.alternatives_weights_collection[index][i].high ** upper_boundary.x[index]
+                 for index in range(self.criteria_amount)])
             weights.append(IntervalNumber(lower_boundary, upper_boundary))
         return FuzzyWeights(self.alternatives_amount, weights)
 
@@ -370,6 +391,8 @@ else:
     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
 
-print str(FuzzyDistributiveGlobalWeightsGenerator(3, 4, criteria_weights,
-                                                  [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
-                                                   alternative_weights_by_crit_3]).Generate())
+generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
+                                        [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
+                                         alternative_weights_by_crit_3])
+print str(generator.DistributiveGenerate())
+print str(generator.MultiplicativeGenerate())
