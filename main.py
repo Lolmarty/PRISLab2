@@ -27,6 +27,18 @@ class IntervalNumber:
         return (((self.low + self.high) / 2.) ** 2 + (((self.high - self.low) / 2.) ** 2) / 3) ** 0.5
 
 
+class InverseTrapezoidalNumber:
+    def __init__(self, low, mid_low, mid_high, high):
+        self.low = low
+        self.mid_low = mid_low
+        self.mid_high = mid_high
+        self.high = high
+       
+    def AlphaLevel(self, alpha):
+    	return IntervalNumber(1. / (self.high + alpha * (self.mid_high - self.high)),
+    	                      1. / (self.low + alpha * (self.mid_low - self.low)))
+
+
 class TrapezoidalNumber:
     def __init__(self, low, mid_low, mid_high, high):
         self.low = low
@@ -42,11 +54,7 @@ class TrapezoidalNumber:
                               self.high + alpha * (self.mid_high - self.high))
 
     def Inverse(self):
-        return TrapezoidalNumber(
-            1. / self.high,
-            1. / self.mid_high,
-            1. / self.mid_low,
-            1. / self.low)
+        return InverseTrapezoidalNumber(self.low, self.mid_low, self.mid_high, self.high)
 
 
 _1 = TrapezoidalNumber(1, 1, 1, 1)
@@ -152,6 +160,8 @@ class FuzzyPairwiseComparisonMatrix:
             for j in range(i + 1, self.n):
                 expanded_matrix[i, j].low *= math.e ** -deltas_and_weights.x[counter]
                 expanded_matrix[i, j].high *= math.e ** deltas_and_weights.x[self.n * (self.n - 1) / 2 + counter]
+                expanded_matrix[j, i].low = 1./expanded_matrix[i, j].high
+                expanded_matrix[j, i].high = 1./expanded_matrix[i, j].low
                 counter += 1
         return expanded_matrix
 
