@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import copy
 import math
 from scipy.optimize import linprog
@@ -12,7 +13,7 @@ class IntervalNumber:
         self.high = high
 
     def __str__(self):
-        return "(" + str(self.low) + ";" + str(self.high) + ")"
+        return "(" + "{0:.3f}".format(self.low) + ";" + "{0:.3f}".format(self.high) + ")"
 
     def __contains__(self, item):
         """
@@ -33,10 +34,10 @@ class InverseTrapezoidalNumber:
         self.mid_low = mid_low
         self.mid_high = mid_high
         self.high = high
-       
+
     def AlphaLevel(self, alpha):
-    	return IntervalNumber(1. / (self.high + alpha * (self.mid_high - self.high)),
-    	                      1. / (self.low + alpha * (self.mid_low - self.low)))
+        return IntervalNumber(1. / (self.high + alpha * (self.mid_high - self.high)),
+                              1. / (self.low + alpha * (self.mid_low - self.low)))
 
 
 class TrapezoidalNumber:
@@ -85,7 +86,7 @@ class FuzzyWeights:
         return self.weights[index]
 
     def __str__(self):
-        return "[" + ";".join([str(weight) for weight in self.weights]) + "]"
+        return "(" + ";".join([str(weight) for weight in self.weights]) + ")"
 
     def GeneratePreSpectreElements(self):
         """Generates the h'th elements for spectres,
@@ -103,7 +104,7 @@ class FuzzyPairwiseComparisonMatrix:
         return self.matrix[i][j]
 
     def __str__(self):
-        return "\n".join(["[" + ",".join([str(element) for element in line]) + "]" for line in self.matrix])
+        return "(■(" + "".join(["@" + "&".join([str(element) for element in line]) + "" for line in self.matrix]) + "))"
 
     def AlphaLevel(self, alpha):
         return FuzzyPairwiseComparisonMatrix(self.n,
@@ -160,8 +161,8 @@ class FuzzyPairwiseComparisonMatrix:
             for j in range(i + 1, self.n):
                 expanded_matrix[i, j].low *= math.e ** -deltas_and_weights.x[counter]
                 expanded_matrix[i, j].high *= math.e ** deltas_and_weights.x[self.n * (self.n - 1) / 2 + counter]
-                expanded_matrix[j, i].low = 1./expanded_matrix[i, j].high
-                expanded_matrix[j, i].high = 1./expanded_matrix[i, j].low
+                expanded_matrix[j, i].low = 1. / expanded_matrix[i, j].high
+                expanded_matrix[j, i].high = 1. / expanded_matrix[i, j].low
                 counter += 1
         return expanded_matrix
 
@@ -331,55 +332,55 @@ alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[_1, one, three.I
                                                                [one.Inverse(), _1, three.Inverse(), three],
                                                                [three, three, _1, five],
                                                                [two.Inverse(), three.Inverse(), five.Inverse(), _1]])
-# for matrix_name, matrix in {("criteria_fpcm", criteria_fpcm),
-#                             ("alternative_fpcm_by_crit_1", alternative_fpcm_by_crit_1),
-#                             ("alternative_fpcm_by_crit_2", alternative_fpcm_by_crit_2),
-#                             ("alternative_fpcm_by_crit_3", alternative_fpcm_by_crit_3)}:
-#     for alpha in [0., 0.5]:
-#         print matrix_name
-#         print "alpha " + str(alpha)
-#         # print matrix.AlphaLevel(alpha)
-#         print "consistent " + str(matrix.AlphaLevel(alpha).Consistency())
-# # if not matrix.AlphaLevel(alpha).Consistency():
-#         #     print "fixed"
-#         #     print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
-#         #
-#         try:
-#             print str(matrix.AlphaLevel(alpha).GenerateWeights())
-#         except Exception:
-#             print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
-#             #
+for alpha in [0., 0.5]:
+    print "alpha " + str(alpha)
+    for matrix_name, matrix in {("D_c", criteria_fpcm),
+                                ("D_1", alternative_fpcm_by_crit_1),
+                                ("D_2", alternative_fpcm_by_crit_2),
+                                ("D_3", alternative_fpcm_by_crit_3)}:
+
+        print matrix_name + "=" + str(matrix.AlphaLevel(alpha))
+        print "consistent " + str(matrix.AlphaLevel(alpha).Consistency())
+        if not matrix.AlphaLevel(alpha).Consistency():
+            print "fixed"
+            print matrix_name + "=" + str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
+            print "weights"
+            print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
+        else:
+            print "weights"
+            print str(matrix.AlphaLevel(alpha).GenerateWeights())
+
 # weights=[]
 # for i in range(matrix.n):
 #     weights.append(matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
 # FuzzyConsistencyCoefficientGenerator(matrix.n,weights).blarg()
 
 # print
-alpha = 0.5
-
-if criteria_fpcm.AlphaLevel(alpha).Consistency():
-    criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
-else:
-    criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-if alternative_fpcm_by_crit_1.AlphaLevel(alpha).Consistency():
-    alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
-else:
-    alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
-        alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-if alternative_fpcm_by_crit_2.AlphaLevel(alpha).Consistency():
-    alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
-else:
-    alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
-        alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-if alternative_fpcm_by_crit_3.AlphaLevel(alpha).Consistency():
-    alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
-else:
-    alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
-        alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-print str(FuzzyDistributiveGlobalWeightsGenerator(3, 4, criteria_weights,
-                                                  [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
-                                                   alternative_weights_by_crit_3]).Generate())
+# alpha = 0.5
+#
+# if criteria_fpcm.AlphaLevel(alpha).Consistency():
+#     criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
+# else:
+#     criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+#
+# if alternative_fpcm_by_crit_1.AlphaLevel(alpha).Consistency():
+#     alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
+# else:
+#     alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
+#         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+#
+# if alternative_fpcm_by_crit_2.AlphaLevel(alpha).Consistency():
+#     alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
+# else:
+#     alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
+#         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+#
+# if alternative_fpcm_by_crit_3.AlphaLevel(alpha).Consistency():
+#     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
+# else:
+#     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
+#         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+#
+# print str(FuzzyDistributiveGlobalWeightsGenerator(3, 4, criteria_weights,
+#                                                   [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
+#                                                    alternative_weights_by_crit_3]).Generate())
