@@ -152,7 +152,7 @@ class FuzzyPairwiseComparisonMatrix:
         return self.matrix[i][j]
 
     def __str__(self):
-         return "(■(" + "@".join(["&".join([str(element) for element in line]) for line in self.matrix]) + "))"
+        return "(■(" + "@".join(["&".join([str(element) for element in line]) for line in self.matrix]) + "))"
         # return "\n".join(["[" + ",".join([str(element) for element in line]) + "]" for line in self.matrix])
 
     def AlphaLevel(self, alpha):
@@ -310,14 +310,14 @@ class FuzzyGlobalWeightsGenerator:
             coefficients = [math.log(alternatives_weights[i].low) for alternatives_weights in
                             self.alternatives_weights_collection]
             lower_boundary = linprog(c=coefficients, bounds=constraints)
-            lower_boundary = reduce(mul,[self.alternatives_weights_collection[index][i].low ** lower_boundary.x[index]
-                                  for index in range(self.criteria_amount)])
+            lower_boundary = reduce(mul, [self.alternatives_weights_collection[index][i].low ** lower_boundary.x[index]
+                                          for index in range(self.criteria_amount)])
             coefficients = [-math.log(alternatives_weights[i].high) for alternatives_weights in
                             self.alternatives_weights_collection]
             upper_boundary = linprog(c=coefficients, bounds=constraints)
             upper_boundary = reduce(mul,
-                [self.alternatives_weights_collection[index][i].high ** upper_boundary.x[index]
-                 for index in range(self.criteria_amount)])
+                                    [self.alternatives_weights_collection[index][i].high ** upper_boundary.x[index]
+                                     for index in range(self.criteria_amount)])
             weights.append(IntervalNumber(lower_boundary, upper_boundary))
         return FuzzyWeights(self.alternatives_amount, weights)
 
@@ -342,21 +342,22 @@ alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[_1, one, three.I
                                                                [two.Inverse(), three.Inverse(), five.Inverse(), _1]])
 for alpha in [0., 0.5]:
     print "alpha " + str(alpha)
-    for matrix_name, matrix in {("D_c", criteria_fpcm),
-                                ("D_1", alternative_fpcm_by_crit_1),
-                                ("D_2", alternative_fpcm_by_crit_2),
-                                ("D_3", alternative_fpcm_by_crit_3)}:
+    for matrix_prefix, matrix in {("_c", criteria_fpcm),
+                                  ("_1", alternative_fpcm_by_crit_1),
+                                  ("_2", alternative_fpcm_by_crit_2),
+                                  ("_3", alternative_fpcm_by_crit_3)}:
 
-        print matrix_name + "=" + str(matrix.AlphaLevel(alpha))
+        print "D" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha))
         print "consistent " + str(matrix.AlphaLevel(alpha).Consistency())
         if not matrix.AlphaLevel(alpha).Consistency():
             print "fixed"
-            print matrix_name + "=" + str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
+            print matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
             print "weights"
-            print str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
+            print "w" + matrix_prefix + "=" + str(
+                matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
         else:
             print "weights"
-            print str(matrix.AlphaLevel(alpha).GenerateWeights())
+            print "w" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateWeights())
         print "spectral consistent " + str(matrix.AlphaLevel(alpha).SpectralConsistency())
 
 print
@@ -391,4 +392,3 @@ generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
                                          alternative_weights_by_crit_3])
 print str(generator.DistributiveGenerate())
 print str(generator.MultiplicativeGenerate())
-
