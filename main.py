@@ -218,30 +218,30 @@ class FuzzyPairwiseComparisonMatrix:
     def GenerateWeights(self):
         restrictions_right_side = [[0 for _ in range(self.n)] for __ in range(self.n * (self.n - 1))]
         restrictions_left_side = [0 for _ in range(self.n * (self.n - 1))]
-        variable_boundaries = tuple([(None, 0) for _ in range(self.n)])
+        equality_constraint_left = [[1 for _ in range(self.n)]]
+        equality_constraint_right = [1.]
+        variable_boundaries = tuple([(0, 1) for _ in range(self.n)])
         counter = 0
         for i in range(self.n - 1):
             for j in range(i + 1, self.n):
                 restrictions_right_side[counter][i] = -1
-                restrictions_right_side[counter][j] = 1
+                restrictions_right_side[counter][j] = self.matrix[i][j].low
                 restrictions_right_side[counter + self.n * (self.n - 1) / 2][i] = 1
-                restrictions_right_side[counter + self.n * (self.n - 1) / 2][j] = -1
-                restrictions_left_side[counter] = -math.log(self.matrix[i][j].low)
-                restrictions_left_side[counter + self.n * (self.n - 1) / 2] = math.log(self.matrix[i][j].high)
+                restrictions_right_side[counter + self.n * (self.n - 1) / 2][j] = -self.matrix[i][j].high
                 counter += 1
         weights = []
         for i in range(self.n):
             coefficients = [0 for _ in range(self.n)]
             coefficients[i] = 1
             lower_bound = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
+                                  A_eq=equality_constraint_left,b_eq=equality_constraint_right,
                                   bounds=variable_boundaries)
-            lower_bound = map(lambda x: math.e ** x, lower_bound.x)
-            lower_bound = lower_bound[i] / sum(lower_bound)
+            lower_bound = lower_bound.x[i] / sum(lower_bound.x)
             coefficients[i] = -1
             upper_bound = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
+                                  A_eq=equality_constraint_left,b_eq=equality_constraint_right,
                                   bounds=variable_boundaries)
-            upper_bound = map(lambda x: math.e ** x, upper_bound.x)
-            upper_bound = upper_bound[i] / sum(upper_bound)
+            upper_bound = upper_bound.x[i] / sum(upper_bound.x)
             weights.append(IntervalNumber(lower_bound, upper_bound))
         return FuzzyWeights(self.n, weights)
 
@@ -360,36 +360,36 @@ if __name__ == '__main__':
             else:
                 print "weights"
                 print "w" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateWeights())
-            print "spectral consistent " + str(matrix.AlphaLevel(alpha).SpectralConsistency())
+            # print "spectral consistent " + str(matrix.AlphaLevel(alpha).SpectralConsistency())
     print
 
-    alpha = 0.5
-
-    if criteria_fpcm.AlphaLevel(alpha).Consistency():
-        criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
-    else:
-        criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-    if alternative_fpcm_by_crit_1.AlphaLevel(alpha).Consistency():
-        alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
-    else:
-        alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
-            alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-    if alternative_fpcm_by_crit_2.AlphaLevel(alpha).Consistency():
-        alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
-    else:
-        alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
-            alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-    if alternative_fpcm_by_crit_3.AlphaLevel(alpha).Consistency():
-        alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
-    else:
-        alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
-            alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-
-    generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
-                                            [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
-                                             alternative_weights_by_crit_3])
-    print str(generator.DistributiveGenerate())
-    print str(generator.MultiplicativeGenerate())
+    # alpha = 0.5
+    #
+    # if criteria_fpcm.AlphaLevel(alpha).Consistency():
+    #     criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
+    # else:
+    #     criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+    #
+    # if alternative_fpcm_by_crit_1.AlphaLevel(alpha).Consistency():
+    #     alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
+    # else:
+    #     alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
+    #         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+    #
+    # if alternative_fpcm_by_crit_2.AlphaLevel(alpha).Consistency():
+    #     alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
+    # else:
+    #     alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
+    #         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+    #
+    # if alternative_fpcm_by_crit_3.AlphaLevel(alpha).Consistency():
+    #     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
+    # else:
+    #     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
+    #         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+    #
+    # generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
+    #                                         [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
+    #                                          alternative_weights_by_crit_3])
+    # print str(generator.DistributiveGenerate())
+    # print str(generator.MultiplicativeGenerate())
