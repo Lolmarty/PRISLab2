@@ -96,6 +96,52 @@ class FuzzyWeights:
         return [weight.DistanceToZero() for weight in self.weights]
 
 
+class Spectre:
+    def __init__(self, n_scale, n_experts, pre_spectre):
+        """
+        :type n_scale: int
+        :type n_experts: int
+        :type pre_spectre: list[float]
+        """
+        if n_experts != len(pre_spectre):
+            raise ValueError("Length of the pre spectre vector ({0}) doesn't match the number of experts ({1}).".format(
+                len(pre_spectre), n_experts))
+        self.n_experts = n_experts
+        n_scale -= 1
+        scale = [IntervalNumber(0., 0.5 / n_scale)]
+        scale.extend([IntervalNumber(float(i) / n_scale - 0.5 / n_scale,
+                                     float(i) / n_scale + 0.5 / n_scale)
+                      for i in range(1, n_scale)])
+        scale.append(IntervalNumber(1 - 0.5 / n_scale, 1))
+        n_scale += 1
+        self.n_scale = n_scale
+        self.spectre = [0 for _ in range(0, n_scale)]
+        for item in pre_spectre:
+            item_index = [scale.index(interval) for interval in scale if item in interval][0]
+            self.spectre[item_index] += 1
+
+    def Phi(self):
+        return -sum([math.log(float(item) / self.n_experts) * float(item) / self.n_experts
+                     for item in self.spectre if item != 0])
+
+    def Average(self):
+        return float(sum([self.spectre[i] * i for i in range(0, self.n_scale)])) / self.n_experts
+
+    def Psi(self):
+        average = self.Average()
+        return float(sum([self.spectre[i] * abs(i - average) for i in range(0, self.n_scale)])) / self.n_experts
+
+    def HetaZero(self):
+        G = self.n_experts / (self.n_scale * math.log(self.n_scale) * math.log(self.n_experts))
+        return math.log(self.n_scale) + G * sum([abs(k - (self.n_scale + 1.) / 2.) for k in range(0, self.n_scale)])
+
+    def Heta(self):
+        return self.Phi() + self.Psi()
+
+    def ConsistencyCoefficient(self):
+        return 1 - self.Heta() / self.HetaZero()
+
+
 class FuzzyPairwiseComparisonMatrix:
     def __init__(self, n, matrix):
         self.n = n
@@ -106,7 +152,7 @@ class FuzzyPairwiseComparisonMatrix:
         return self.matrix[i][j]
 
     def __str__(self):
-        return "(■(" + "".join(["@" + "&".join([str(element) for element in line]) + "" for line in self.matrix]) + "))"
+         return "(■(" + "@".join(["&".join([str(element) for element in line]) for line in self.matrix]) + "))"
         # return "\n".join(["[" + ",".join([str(element) for element in line]) + "]" for line in self.matrix])
 
     def AlphaLevel(self, alpha):
@@ -199,75 +245,15 @@ class FuzzyPairwiseComparisonMatrix:
             weights.append(IntervalNumber(lower_bound, upper_bound))
         return FuzzyWeights(self.n, weights)
 
-
-class Spectre:
-    def __init__(self, n_scale, n_experts, pre_spectre):
-        """
-        :type n_scale: int
-        :type n_experts: int
-        :type pre_spectre: list[float]
-        """
-        if n_experts != len(pre_spectre):
-            raise ValueError("Length of the pre spectre vector ({0}) doesn't match the number of experts ({1}).".format(
-                len(pre_spectre), n_experts))
-        self.n_experts = n_experts
-        n_scale -= 1
-        scale = [IntervalNumber(0., 0.5 / n_scale)]
-        scale.extend([IntervalNumber(float(i) / n_scale - 0.5 / n_scale,
-                                     float(i) / n_scale + 0.5 / n_scale)
-                      for i in range(1, n_scale)])
-        scale.append(IntervalNumber(1 - 0.5 / n_scale, 1))
-        n_scale += 1
-        self.n_scale = n_scale
-        self.spectre = [0 for _ in range(0, n_scale)]
-        for item in pre_spectre:
-            item_index = [scale.index(interval) for interval in scale if item in interval][0]
-            self.spectre[item_index] += 1
-
-    def Phi(self):
-        return -sum([math.log(float(item) / self.n_experts) * float(item) / self.n_experts
-                     for item in self.spectre if item != 0])
-
-    def Average(self):
-        return float(sum([self.spectre[i] * i for i in range(0, self.n_scale)])) / self.n_experts
-
-    def Psi(self):
-        average = self.Average()
-        return float(sum([self.spectre[i] * abs(i - average) for i in range(0, self.n_scale)])) / self.n_experts
-
-    def HetaZero(self):
-        G = self.n_experts / (self.n_scale * math.log(self.n_scale) * math.log(self.n_experts))
-        return math.log(self.n_scale) + G * sum([abs(k - (self.n_scale + 1.) / 2.) for k in range(0, self.n_scale)])
-
-    def Heta(self):
-        return self.Phi() + self.Psi()
-
-    def ConsistencyCoefficient(self):
-        return 1 - self.Heta() / self.HetaZero()
-
-
-class FuzzyConsistencyCoefficientGenerator:
-    def __init__(self, n, weights):
-        """
-        :type n: int
-        :type weights: list[FuzzyWeights]
-        """
-        if n != len(weights):
-            raise ValueError("Amount of the weights vectors ({0}) doesn't match the number of dimensions ({1}).".format(
-                len(weights), n))
-        if not all([n == weight.n for weight in weights]):
-            indexes = ",".join([str(weights.index(weight)) for weight in weights if n != weight.n])
-            raise ValueError("Length of the weights vectors #{0} doesn't match the number of dimensions ({1}).".format(
-                indexes, n))
-        self.n = n
-        self.weights = copy.deepcopy(weights)
-
-    def blarg(self):
-        temp = [weight.GeneratePreSpectreElements() for weight in self.weights]
+    def SpectralConsistency(self):
+        weights = []
+        for i in range(matrix.n):
+            weights.append(self.GenerateFromRow(i).GenerateWeights())
+        temp = [weight.GeneratePreSpectreElements() for weight in weights]
         pre_spectres = [[temp[j][i] for j in range(0, self.n)] for i in range(0, self.n)]
         spectres = [Spectre(N, self.n, pre_spectre) for pre_spectre in pre_spectres]
         consistency_coefficients = [spectre.ConsistencyCoefficient() for spectre in spectres]
-        print consistency_coefficients
+        return min(consistency_coefficients)
 
 
 class FuzzyGlobalWeightsGenerator:
@@ -371,11 +357,9 @@ for alpha in [0., 0.5]:
         else:
             print "weights"
             print str(matrix.AlphaLevel(alpha).GenerateWeights())
+        print "spectral consistent " + str(matrix.AlphaLevel(alpha).SpectralConsistency())
 
-# weights=[]
-# for i in range(matrix.n):
-#     weights.append(matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
-# FuzzyConsistencyCoefficientGenerator(matrix.n,weights).blarg()
+print
 
 alpha = 0.5
 
