@@ -7,6 +7,8 @@ from scipy.optimize import linprog
 import string
 
 N = 11  # scale coefficient
+Epsilon = 0.5 # spectre detection coefficient
+ApplicabilityStep = 1 # spectre applicability coefficient
 
 
 class IntervalNumber:
@@ -97,28 +99,37 @@ class FuzzyWeights:
 
 
 class Spectre:
-    def __init__(self, n_scale, n_experts, pre_spectre):
+    def __init__(self, n_scale, n_experts, pre_spectre, spectre=None):
         """
         :type n_scale: int
         :type n_experts: int
         :type pre_spectre: list[float]
         """
-        if n_experts != len(pre_spectre):
-            raise ValueError("Length of the pre spectre vector ({0}) doesn't match the number of experts ({1}).".format(
-                len(pre_spectre), n_experts))
-        self.n_experts = n_experts
-        n_scale -= 1
-        scale = [IntervalNumber(0., 0.5 / n_scale)]
-        scale.extend([IntervalNumber(float(i) / n_scale - 0.5 / n_scale,
-                                     float(i) / n_scale + 0.5 / n_scale)
-                      for i in range(1, n_scale)])
-        scale.append(IntervalNumber(1 - 0.5 / n_scale, 1))
-        n_scale += 1
-        self.n_scale = n_scale
-        self.spectre = [0 for _ in range(0, n_scale)]
-        for item in pre_spectre:
-            item_index = [scale.index(interval) for interval in scale if item in interval][0]
-            self.spectre[item_index] += 1
+        if spectre is None:
+            if n_experts != len(pre_spectre):
+                raise ValueError("Length of the pre spectre vector ({0}) doesn't match the number of experts ({1}).".format(
+                    len(pre_spectre), n_experts))
+            self.n_experts = n_experts
+            n_scale -= 1
+            scale = [IntervalNumber(0., 0.5 / n_scale)]
+            scale.extend([IntervalNumber(float(i) / n_scale - 0.5 / n_scale,
+                                         float(i) / n_scale + 0.5 / n_scale)
+                          for i in range(1, n_scale)])
+            scale.append(IntervalNumber(1 - 0.5 / n_scale, 1))
+            n_scale += 1
+            self.n_scale = n_scale
+            self.spectre = [0 for _ in range(0, n_scale)]
+            for item in pre_spectre:
+                item_index = [scale.index(interval) for interval in scale if item in interval][0]
+                self.spectre[item_index] += 1
+        else:
+            self.n_experts = n_experts
+            self.n_scale = n_scale
+            self.spectre = copy.deepcopy(spectre)
+
+
+    def __str__(self):
+        return "(" + ",".join(map(str, self.spectre)) + ")"
 
     def Phi(self):
         return -sum([math.log(float(item) / self.n_experts) * float(item) / self.n_experts
@@ -140,6 +151,18 @@ class Spectre:
 
     def ConsistencyCoefficient(self):
         return 1 - self.Heta() / self.HetaZero()
+
+    def DetectionThreshold(self):
+        detection_spectre = [1 for _ in range(self.n_scale)]
+        detection_spectre[0]=0
+        detection_spectre[int(Epsilon*self.n_scale + 1)] += 1
+        return Spectre(self.n_scale,self.n_scale,None,detection_spectre).ConsistencyCoefficient()
+
+    def ApplicabilityThreshold(self):
+        applicability_spectre = [0 for _ in range(self.n_scale)]
+        applicability_spectre[0] = 1
+        applicability_spectre[int(round(ApplicabilityStep))] = 1
+        return Spectre(self.n_scale, 2, None, applicability_spectre).ConsistencyCoefficient()
 
 
 class FuzzyPairwiseComparisonMatrix:
@@ -234,26 +257,37 @@ class FuzzyPairwiseComparisonMatrix:
             coefficients = [0 for _ in range(self.n)]
             coefficients[i] = 1
             lower_bound = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
-                                  A_eq=equality_constraint_left,b_eq=equality_constraint_right,
+                                  A_eq=equality_constraint_left, b_eq=equality_constraint_right,
                                   bounds=variable_boundaries)
             lower_bound = lower_bound.x[i] / sum(lower_bound.x)
             coefficients[i] = -1
             upper_bound = linprog(c=coefficients, A_ub=restrictions_right_side, b_ub=restrictions_left_side,
-                                  A_eq=equality_constraint_left,b_eq=equality_constraint_right,
+                                  A_eq=equality_constraint_left, b_eq=equality_constraint_right,
                                   bounds=variable_boundaries)
             upper_bound = upper_bound.x[i] / sum(upper_bound.x)
             weights.append(IntervalNumber(lower_bound, upper_bound))
         return FuzzyWeights(self.n, weights)
 
-    def SpectralConsistency(self):
+    def Spectres(self):
         weights = []
         for i in range(self.n):
             weights.append(self.GenerateFromRow(i).GenerateWeights())
         temp = [weight.GeneratePreSpectreElements() for weight in weights]
         pre_spectres = [[temp[j][i] for j in range(0, self.n)] for i in range(0, self.n)]
         spectres = [Spectre(N, self.n, pre_spectre) for pre_spectre in pre_spectres]
+        return spectres
+
+    def SpectralConsistencyCoefficient(self):
+        spectres = self.Spectres()
         consistency_coefficients = [spectre.ConsistencyCoefficient() for spectre in spectres]
         return min(consistency_coefficients)
+
+    def SpectralConsistent(self):
+        spectres = self.Spectres()
+        minimal_consistency = self.SpectralConsistencyCoefficient()
+        minimal_spectre = [spectre for spectre in spectres
+                                if spectre.ConsistencyCoefficient() == minimal_consistency][0]
+        return minimal_spectre.DetectionThreshold() < minimal_consistency < minimal_spectre.ApplicabilityThreshold()
 
 
 class FuzzyGlobalWeightsGenerator:
@@ -342,54 +376,62 @@ alternative_fpcm_by_crit_3 = FuzzyPairwiseComparisonMatrix(4, [[_1, one, three.I
                                                                [two.Inverse(), three.Inverse(), five.Inverse(), _1]])
 
 if __name__ == '__main__':
-    for alpha in [0., 0.5]:
+    for alpha in [0.5]:
         print "alpha " + str(alpha)
-        for matrix_prefix, matrix in {("_c", criteria_fpcm),
-                                      ("_1", alternative_fpcm_by_crit_1),
-                                      ("_2", alternative_fpcm_by_crit_2),
-                                      ("_3", alternative_fpcm_by_crit_3)}:
+        for matrix_prefix, matrix in {("c", criteria_fpcm),
+                                      ("1", alternative_fpcm_by_crit_1),
+                                      ("2", alternative_fpcm_by_crit_2),
+                                      ("3", alternative_fpcm_by_crit_3)}:
 
-            print "D" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha))
-            print "consistent " + str(matrix.AlphaLevel(alpha).Consistency())
-            if not matrix.AlphaLevel(alpha).Consistency():
-                print "fixed"
-                print "D" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
-                print "weights"
-                print "w" + matrix_prefix + "=" + str(
-                    matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
-            else:
-                print "weights"
-                print "w" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateWeights())
+            # print "D_" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha))
+            # print "consistent " + str(matrix.AlphaLevel(alpha).Consistency())
+            # if not matrix.AlphaLevel(alpha).Consistency():
+            # print "fixed"
+            # print "D_" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix())
+            # print "weights"
+            # print "w_" + matrix_prefix + "=" + str(
+            #     matrix.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights())
+            # else:
+            #     print "weights"
+            #     print "w_" + matrix_prefix + "=" + str(matrix.AlphaLevel(alpha).GenerateWeights())
             # print "spectral consistent " + str(matrix.AlphaLevel(alpha).SpectralConsistency())
-    print
+            for i in range(matrix.n):
+                print "w_" + matrix_prefix + "^" + str(i + 1) + "=" + str(
+                    matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
+            print "R_" + matrix_prefix + "=(■(" + "@".join(map(str,matrix.AlphaLevel(alpha).Spectres())) + "))"
+            print "k_y (R_" + matrix_prefix + ")=(" + ";".join(["{0:.3f}".format(spectre.ConsistencyCoefficient())
+                                                            for spectre in matrix.AlphaLevel(alpha).Spectres()]) + ")"
+            print "k_y (D_" + matrix_prefix + ")=" + str(matrix.AlphaLevel(alpha).SpectralConsistencyCoefficient())
+            print "Spectral consistency " + str(matrix.AlphaLevel(alpha).SpectralConsistent())
+            print
 
-    # alpha = 0.5
-    #
-    # if criteria_fpcm.AlphaLevel(alpha).Consistency():
-    #     criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
-    # else:
-    #     criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-    #
-    # if alternative_fpcm_by_crit_1.AlphaLevel(alpha).Consistency():
-    #     alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
-    # else:
-    #     alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
-    #         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-    #
-    # if alternative_fpcm_by_crit_2.AlphaLevel(alpha).Consistency():
-    #     alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
-    # else:
-    #     alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
-    #         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-    #
-    # if alternative_fpcm_by_crit_3.AlphaLevel(alpha).Consistency():
-    #     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
-    # else:
-    #     alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
-    #         alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
-    #
-    # generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
-    #                                         [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
-    #                                          alternative_weights_by_crit_3])
-    # print str(generator.DistributiveGenerate())
+    alpha = 0.5
+
+    if criteria_fpcm.AlphaLevel(alpha).Consistency():
+        criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateWeights()
+    else:
+        criteria_weights = criteria_fpcm.AlphaLevel(alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+    if alternative_fpcm_by_crit_1.AlphaLevel(alpha).Consistency():
+        alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(alpha).GenerateWeights()
+    else:
+        alternative_weights_by_crit_1 = alternative_fpcm_by_crit_1.AlphaLevel(
+            alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+    if alternative_fpcm_by_crit_2.AlphaLevel(alpha).Consistency():
+        alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(alpha).GenerateWeights()
+    else:
+        alternative_weights_by_crit_2 = alternative_fpcm_by_crit_2.AlphaLevel(
+            alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+    if alternative_fpcm_by_crit_3.AlphaLevel(alpha).Consistency():
+        alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(alpha).GenerateWeights()
+    else:
+        alternative_weights_by_crit_3 = alternative_fpcm_by_crit_3.AlphaLevel(
+            alpha).GenerateMinimalExpandedMatrix().GenerateWeights()
+
+    generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
+                                            [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
+                                             alternative_weights_by_crit_3])
+    print "w^glob=" + str(generator.DistributiveGenerate())
     # print str(generator.MultiplicativeGenerate())
