@@ -4,11 +4,10 @@ import math
 from operator import mul
 
 from scipy.optimize import linprog
-import string
 
-N = 11  # scale coefficient
-Epsilon = 0.5 # spectre detection coefficient
-ApplicabilityStep = 1 # spectre applicability coefficient
+N = 11  # scales count
+Epsilon = 0.5  # spectre detection coefficient
+ApplicabilityStep = 1  # spectre applicability coefficient
 
 
 class IntervalNumber:
@@ -107,8 +106,9 @@ class Spectre:
         """
         if spectre is None:
             if n_experts != len(pre_spectre):
-                raise ValueError("Length of the pre spectre vector ({0}) doesn't match the number of experts ({1}).".format(
-                    len(pre_spectre), n_experts))
+                raise ValueError(
+                    "Length of the pre spectre vector ({0}) doesn't match the number of experts ({1}).".format(
+                        len(pre_spectre), n_experts))
             self.n_experts = n_experts
             n_scale -= 1
             scale = [IntervalNumber(0., 0.5 / n_scale)]
@@ -126,7 +126,6 @@ class Spectre:
             self.n_experts = n_experts
             self.n_scale = n_scale
             self.spectre = copy.deepcopy(spectre)
-
 
     def __str__(self):
         return "(" + ",".join(map(str, self.spectre)) + ")"
@@ -154,14 +153,15 @@ class Spectre:
 
     def DetectionThreshold(self):
         detection_spectre = [1 for _ in range(self.n_scale)]
-        detection_spectre[0]=0
-        detection_spectre[int(Epsilon*self.n_scale + 1)] += 1
-        return Spectre(self.n_scale,self.n_scale,None,detection_spectre).ConsistencyCoefficient()
+        detection_spectre[0] = 0
+        detection_spectre[int(Epsilon * self.n_scale)] += 1
+        return Spectre(self.n_scale, self.n_scale, None, detection_spectre).ConsistencyCoefficient()
 
     def ApplicabilityThreshold(self):
         applicability_spectre = [0 for _ in range(self.n_scale)]
-        applicability_spectre[0] = 1
-        applicability_spectre[int(round(ApplicabilityStep))] = 1
+        position = 0
+        applicability_spectre[position] = 1
+        applicability_spectre[position + ApplicabilityStep] = 1
         return Spectre(self.n_scale, 2, None, applicability_spectre).ConsistencyCoefficient()
 
 
@@ -286,8 +286,13 @@ class FuzzyPairwiseComparisonMatrix:
         spectres = self.Spectres()
         minimal_consistency = self.SpectralConsistencyCoefficient()
         minimal_spectre = [spectre for spectre in spectres
-                                if spectre.ConsistencyCoefficient() == minimal_consistency][0]
-        return minimal_spectre.DetectionThreshold() < minimal_consistency < minimal_spectre.ApplicabilityThreshold()
+                           if spectre.ConsistencyCoefficient() == minimal_consistency][0]
+        print "T_d = " + str(minimal_spectre.DetectionThreshold())
+        print "T_a = " + str(minimal_spectre.ApplicabilityThreshold())
+        print "k_y (R)>= T_a : ", minimal_consistency >= minimal_spectre.ApplicabilityThreshold()
+        print "T_d < k_y (R) <T_a : ", minimal_spectre.DetectionThreshold() < minimal_consistency < minimal_spectre.ApplicabilityThreshold()
+        print "T_d >= k_y (R) : ", minimal_spectre.DetectionThreshold() >= minimal_consistency
+        return
 
 
 class FuzzyGlobalWeightsGenerator:
@@ -398,11 +403,12 @@ if __name__ == '__main__':
             for i in range(matrix.n):
                 print "w_" + matrix_prefix + "^" + str(i + 1) + "=" + str(
                     matrix.AlphaLevel(alpha).GenerateFromRow(i).GenerateWeights())
-            print "R_" + matrix_prefix + "=(■(" + "@".join(map(str,matrix.AlphaLevel(alpha).Spectres())) + "))"
+            print "R_" + matrix_prefix + "=(■(" + "@".join(map(str, matrix.AlphaLevel(alpha).Spectres())) + "))"
             print "k_y (R_" + matrix_prefix + ")=(" + ";".join(["{0:.3f}".format(spectre.ConsistencyCoefficient())
-                                                            for spectre in matrix.AlphaLevel(alpha).Spectres()]) + ")"
+                                                                for spectre in
+                                                                matrix.AlphaLevel(alpha).Spectres()]) + ")"
             print "k_y (D_" + matrix_prefix + ")=" + str(matrix.AlphaLevel(alpha).SpectralConsistencyCoefficient())
-            print "Spectral consistency " + str(matrix.AlphaLevel(alpha).SpectralConsistent())
+            matrix.AlphaLevel(alpha).SpectralConsistent()
             print
 
     alpha = 0.5
@@ -433,5 +439,5 @@ if __name__ == '__main__':
     generator = FuzzyGlobalWeightsGenerator(3, 4, criteria_weights,
                                             [alternative_weights_by_crit_1, alternative_weights_by_crit_2,
                                              alternative_weights_by_crit_3])
-    print "w^glob=" + str(generator.DistributiveGenerate())
-    # print str(generator.MultiplicativeGenerate())
+    print "Distr: w^glob=" + str(generator.DistributiveGenerate())
+    print "Multi: w^glob=" + str(generator.MultiplicativeGenerate())
